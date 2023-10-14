@@ -1,0 +1,46 @@
+name: CI
+'on':
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: null
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+      - name: Start the REST API
+        run: python calculator.py --rest &
+      - name: Run tests with pytest
+        run: pytest 
+      - name: Skip build and push if any test fails
+        uses: actions/github-script@v5
+        with: 
+         script: >
+          github.actions.skipWorkflow('Build and Push Image')
+
+          if (github.context.workflow.runNumber -
+          github.context.workflow.previous_run_number) > 1 &&
+
+          github.context.workflow.status == 'failed' &&
+
+          github.context.workflow.conclusion == 'failure'
+      - name: Login to Azure Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: judevops.azurecr.io
+          username: '${{ secrets.ACR_USERNAME }}'
+          password: '${{ secrets.ACR_PASSWORD }}'
+      - name: Build and Push Docker Image
+        run: >
+          docker build . --file dockerfile --tag
+          judevops.azurecr.io/abdulrahman_mofleh-calculater:${{
+          github.run_number }}
+
+          docker push judevops.azurecr.io/abdulrahman_mofleh-calculater:${{
+          github.run_number }}
